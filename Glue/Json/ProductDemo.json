@@ -1,0 +1,146 @@
+{
+	"jobConfig": {
+		"name": "ProductDemo",
+		"description": "",
+		"role": "arn:aws:iam::322528665490:role/service-role/AWSGlueServiceRole-Flights",
+		"command": "glueetl",
+		"version": "4.0",
+		"runtime": null,
+		"workerType": "G.1X",
+		"numberOfWorkers": 3,
+		"maxCapacity": 3,
+		"maxRetries": 0,
+		"timeout": 2880,
+		"maxConcurrentRuns": 1,
+		"security": "none",
+		"scriptName": "ProductDemo.py",
+		"scriptLocation": "s3://aws-glue-assets-322528665490-us-east-1/scripts/",
+		"language": "python-3",
+		"spark": true,
+		"sparkConfiguration": "standard",
+		"jobParameters": [],
+		"tags": [],
+		"jobMode": "VISUAL_MODE",
+		"createdOn": "2024-03-18T10:40:44.798Z",
+		"developerMode": false,
+		"connectionsList": [],
+		"temporaryDirectory": "s3://aws-glue-assets-322528665490-us-east-1/temporary/",
+		"logging": true,
+		"glueHiveMetastore": true,
+		"etlAutoTuning": false,
+		"metrics": true,
+		"observabilityMetrics": true,
+		"pythonPath": "s3://aws-glue-studio-transforms-510798373988-prod-us-east-1/gs_common.py,s3://aws-glue-studio-transforms-510798373988-prod-us-east-1/gs_flatten.py",
+		"bookmark": "job-bookmark-disable",
+		"sparkPath": "s3://aws-glue-assets-322528665490-us-east-1/sparkHistoryLogs/",
+		"flexExecution": false,
+		"minFlexWorkers": null
+	},
+	"dag": {
+		"node-1710920029064": {
+			"nodeId": "node-1710920029064",
+			"dataPreview": false,
+			"previewAmount": 0,
+			"inputs": [
+				"node-1710757747134"
+			],
+			"name": "Flatten",
+			"generatedNodeName": "Flatten_node1710920029064",
+			"classification": "Transform",
+			"type": "DynamicTransform",
+			"parameters": [
+				{
+					"name": "maxLevels",
+					"value": [
+						"0"
+					],
+					"isOptional": true,
+					"type": "int",
+					"listType": null
+				}
+			],
+			"functionName": "gs_flatten",
+			"path": "s3://aws-glue-studio-transforms-510798373988-prod-us-east-1/gs_flatten.py",
+			"version": "1.0.0",
+			"transformName": "gs_flatten",
+			"outputSchemas": null,
+			"parentsValid": true,
+			"calculatedType": "",
+			"codeGenVersion": 2
+		},
+		"node-1710757747134": {
+			"nodeId": "node-1710757747134",
+			"dataPreview": false,
+			"previewAmount": 0,
+			"inputs": [],
+			"name": "Raw:Products",
+			"generatedNodeName": "RawProducts_node1710757747134",
+			"classification": "DataSource",
+			"type": "S3",
+			"isCatalog": false,
+			"format": "json",
+			"paths": [
+				"s3://abcddemo-products/Validated/Products/"
+			],
+			"compressionType": null,
+			"exclusions": [],
+			"groupFiles": null,
+			"groupSize": null,
+			"recurse": true,
+			"maxBand": null,
+			"maxFilesInBand": null,
+			"additionalOptions": {
+				"boundedSize": null,
+				"boundedFiles": null,
+				"enableSamplePath": false,
+				"samplePath": "s3://abcddemo-products/Validated/Products/12.json",
+				"boundedOption": null
+			},
+			"jsonPath": "",
+			"multiline": true,
+			"outputSchemas": [
+				[
+					{
+						"key": "products",
+						"fullPath": [
+							"products"
+						],
+						"type": "string",
+						"glueStudioType": null,
+						"children": null
+					}
+				]
+			],
+			"calculatedType": "",
+			"codeGenVersion": 2,
+			"inferSchemaChanged": true
+		},
+		"node-1710758580598": {
+			"nodeId": "node-1710758580598",
+			"dataPreview": false,
+			"previewAmount": 0,
+			"inputs": [
+				"node-1710920029064"
+			],
+			"name": "Amazon S3",
+			"generatedNodeName": "AmazonS3_node1710758580598",
+			"classification": "DataSink",
+			"type": "S3",
+			"streamingBatchInterval": 100,
+			"format": "json",
+			"compression": "snappy",
+			"path": "s3://abcddemo-products/raw/",
+			"partitionKeys": [],
+			"schemaChangePolicy": {
+				"enableUpdateCatalog": false,
+				"updateBehavior": null,
+				"database": null,
+				"table": null
+			},
+			"updateCatalogOptions": "none",
+			"calculatedType": "",
+			"codeGenVersion": 2
+		}
+	},
+	"hasBeenSaved": false
+}

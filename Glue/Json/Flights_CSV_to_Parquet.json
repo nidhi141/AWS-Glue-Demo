@@ -1,0 +1,83 @@
+{
+	"jobConfig": {
+		"name": "Flights_CSV_to_Parquet",
+		"description": "",
+		"role": "arn:aws:iam::322528665490:role/NidhiGlueJobsRole",
+		"command": "glueetl",
+		"version": "4.0",
+		"runtime": null,
+		"workerType": "G.1X",
+		"numberOfWorkers": 10,
+		"maxCapacity": 10,
+		"maxRetries": 0,
+		"timeout": 2880,
+		"maxConcurrentRuns": 1,
+		"security": "none",
+		"scriptName": "Flights_CSV_to_Parquet.py",
+		"scriptLocation": "s3://aws-glue-assets-322528665490-us-east-1/scripts/",
+		"language": "python-3",
+		"spark": true,
+		"sparkConfiguration": "standard",
+		"jobParameters": [],
+		"tags": [],
+		"jobMode": "VISUAL_MODE",
+		"createdOn": "2023-11-25T07:10:11.832Z",
+		"developerMode": false,
+		"connectionsList": [],
+		"temporaryDirectory": "s3://aws-glue-assets-322528665490-us-east-1/temporary/",
+		"logging": true,
+		"glueHiveMetastore": true,
+		"etlAutoTuning": false,
+		"metrics": true,
+		"observabilityMetrics": true,
+		"bookmark": "job-bookmark-disable",
+		"sparkPath": "s3://aws-glue-assets-322528665490-us-east-1/sparkHistoryLogs/",
+		"flexExecution": false,
+		"minFlexWorkers": null
+	},
+	"dag": {
+		"node-1700897785478": {
+			"nodeId": "node-1700897785478",
+			"dataPreview": false,
+			"previewAmount": 0,
+			"inputs": [],
+			"name": "AWS Glue Data Catalog",
+			"generatedNodeName": "AWSGlueDataCatalog_node1700897785478",
+			"classification": "DataSource",
+			"type": "Catalog",
+			"isCatalog": true,
+			"database": "flights-db",
+			"table": "nidhi-flights",
+			"calculatedType": "",
+			"runtimeParameters": [],
+			"codeGenVersion": 2
+		},
+		"node-1700895992743": {
+			"nodeId": "node-1700895992743",
+			"dataPreview": false,
+			"previewAmount": 0,
+			"inputs": [
+				"node-1700897785478"
+			],
+			"name": "Parquet Write S3",
+			"generatedNodeName": "ParquetWriteS3_node1700895992743",
+			"classification": "DataSink",
+			"type": "S3",
+			"streamingBatchInterval": 100,
+			"format": "glueparquet",
+			"compression": "snappy",
+			"path": "s3://nidhi-gluejobs/flights_parquet/",
+			"partitionKeys": [],
+			"schemaChangePolicy": {
+				"enableUpdateCatalog": false,
+				"updateBehavior": null,
+				"database": null,
+				"table": null
+			},
+			"updateCatalogOptions": "none",
+			"calculatedType": "",
+			"codeGenVersion": 2
+		}
+	},
+	"hasBeenSaved": false
+}

@@ -1,0 +1,63 @@
+{
+	"jobConfig": {
+		"name": "ProductCategory",
+		"description": "",
+		"role": "arn:aws:iam::322528665490:role/NidhiGlueJobsRole",
+		"command": "glueetl",
+		"version": "4.0",
+		"runtime": null,
+		"workerType": "G.1X",
+		"numberOfWorkers": 4,
+		"maxCapacity": 4,
+		"maxRetries": 0,
+		"timeout": 2880,
+		"maxConcurrentRuns": 1,
+		"security": "none",
+		"scriptName": "ProductCategory.py",
+		"scriptLocation": "s3://aws-glue-assets-322528665490-us-east-1/scripts/",
+		"language": "python-3",
+		"spark": true,
+		"sparkConfiguration": "standard",
+		"jobParameters": [
+			{
+				"key": "--JOB_NAME",
+				"value": "ProductCategory",
+				"existing": false
+			},
+			{
+				"key": "--input_path",
+				"value": "s3://abcddemo-products/Validated/products.json",
+				"existing": false
+			},
+			{
+				"key": "--output_path",
+				"value": "s3://abcddemo-products/Staging/",
+				"existing": false
+			}
+		],
+		"tags": [],
+		"jobMode": "DEVELOPER_MODE",
+		"createdOn": "2024-03-15T10:58:04.787Z",
+		"developerMode": true,
+		"connectionsList": [],
+		"temporaryDirectory": "s3://aws-glue-assets-322528665490-us-east-1/temporary/",
+		"logging": true,
+		"glueHiveMetastore": true,
+		"etlAutoTuning": false,
+		"metrics": true,
+		"observabilityMetrics": true,
+		"bookmark": "job-bookmark-disable",
+		"sparkPath": "s3://aws-glue-assets-322528665490-us-east-1/sparkHistoryLogs/",
+		"flexExecution": true,
+		"minFlexWorkers": null,
+		"sourceControlDetails": {
+			"Provider": "GITHUB",
+			"Repository": "",
+			"Branch": "",
+			"Folder": "ProductCategory",
+			"LastCommitId": "b70140c6675765cf1cf9996b3b89a05f2451c156"
+		}
+	},
+	"hasBeenSaved": false,
+	"script": "import sys\r\nfrom pyspark.context import SparkContext\r\nfrom awsglue.context import GlueContext\r\nfrom awsglue.transforms import *\r\nfrom awsglue.utils import getResolvedOptions\r\nfrom awsglue.job import Job\r\nfrom pyspark.sql.functions import col, explode_outer\r\nfrom datetime import datetime\r\n\r\n# Create a SparkContext and GlueContext\r\nsc = SparkContext()\r\nglueContext = GlueContext(sc)\r\nspark = glueContext.spark_session\r\n\r\n# Get the arguments passed to the job\r\nargs = getResolvedOptions(sys.argv, ['JOB_NAME', 'input_path', 'output_path'])\r\n\r\n# Create a Glue job\r\njob = Job(glueContext)\r\njob.init(args['JOB_NAME'], args)\r\n\r\n# Define the input and output paths from the arguments\r\ninput_path = args['input_path']\r\noutput_path = args['output_path']\r\n\r\n# Read JSON data from input_path (which contains incremental/CDC data)\r\njson_data = spark.read.json(input_path)\r\n\r\n# Explode the 'products' array to access the nested 'category' column\r\nexploded_data = json_data.selectExpr(\"explode(products) as product\")\r\n\r\n# Extract ratings data\r\nratings_data = exploded_data.select(\"product.id\", explode_outer(\"product.reviews\").alias(\"review\"))\r\n# Flatten the nested structure for ratings data\r\nflattened_ratings_data = ratings_data.select(\"id\", \"review.*\")\r\n# Write to a separate CSV file\r\nratings_csv_path = f\"{output_path}/ratings\"\r\nflattened_ratings_data.write.mode(\"append\").csv(ratings_csv_path, header=True)\r\n\r\n# Filter data based on category and write to separate folders\r\ncategories = exploded_data.select(\"product.category\").distinct().rdd.flatMap(lambda x: x).collect()\r\n\r\n# Flatten the imgs array\r\nflattened_data = exploded_data.select(col(\"product.*\"))\r\nflattened_data = flattened_data.drop(\"imgs\")\r\nflattened_data = flattened_data.drop(\"reviews\")\r\n\r\n# For each category, determine if data needs to be updated or inserted\r\nfor category in categories:\r\n    category_data = flattened_data.filter(col(\"category\") == category)\r\n    category_output_path = f\"{output_path}/{category}\"\r\n    \r\n    # Read existing data for the category\r\n    existing_data = spark.read.json(category_output_path)\r\n    \r\n    # Join existing and new data on product id\r\n    joined_data = category_data.join(existing_data, \"id\", \"outer\")\r\n    \r\n    # Identify the latest record for each product id\r\n    latest_data = joined_data.withColumn(\"latest\", max(\"timestamp\").over(Window.partitionBy(\"id\")) == col(\"timestamp\"))\r\n    \r\n    # Select only the latest records\r\n    latest_records = latest_data.filter(col(\"latest\"))\r\n    \r\n    # Write latest records to target folder\r\n    latest_records.write.mode(\"overwrite\").json(category_output_path)\r\n\r\n# Commit the job\r\njob.commit()\r\n"
+}

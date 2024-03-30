@@ -1,0 +1,210 @@
+{
+	"jobConfig": {
+		"name": "Cleansing_Job",
+		"description": "",
+		"role": "arn:aws:iam::322528665490:role/service-role/AWSGlueServiceRole-Flights",
+		"command": "glueetl",
+		"version": "4.0",
+		"runtime": null,
+		"workerType": "G.1X",
+		"numberOfWorkers": "5",
+		"maxCapacity": 5,
+		"maxRetries": 0,
+		"timeout": 2880,
+		"maxConcurrentRuns": 1,
+		"security": "none",
+		"scriptName": "Cleansing_Job.py",
+		"scriptLocation": "s3://aws-glue-assets-322528665490-us-east-1/scripts/",
+		"language": "python-3",
+		"spark": false,
+		"jobParameters": [
+			{
+				"key": "--conf",
+				"value": "spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog --conf spark.delta.logStore.class=org.apache.spark.sql.delta.storage.S3SingleDriverLogStore",
+				"existing": false
+			},
+			{
+				"key": "--datalake-formats",
+				"value": "delta",
+				"existing": false
+			}
+		],
+		"tags": [],
+		"jobMode": "NOTEBOOK_MODE",
+		"createdOn": "2024-03-26T05:37:05.745Z",
+		"developerMode": false,
+		"connectionsList": [],
+		"temporaryDirectory": "s3://aws-glue-assets-322528665490-us-east-1/temporary/",
+		"glueHiveMetastore": true,
+		"etlAutoTuning": false,
+		"pythonShellPrebuiltLibraryOption": "analytics",
+		"flexExecution": false,
+		"minFlexWorkers": null,
+		"bookmark": "",
+		"metrics": "",
+		"observabilityMetrics": "",
+		"logging": "",
+		"sparkPath": "",
+		"serverEncryption": false,
+		"pythonPath": "",
+		"dependentPath": "",
+		"referencedPath": "",
+		"etlAutoScaling": false,
+		"etlAutoTuningJobRules": "",
+		"pythonVersion": ""
+	},
+	"hasBeenSaved": false,
+	"script": "# Processing Products JSON files and writing as Delta files in S3 in this job\n\nimport sys\nfrom pyspark.context import SparkContext\nfrom awsglue.context import GlueContext\nfrom awsglue.transforms import *\nfrom awsglue.utils import getResolvedOptions\nfrom awsglue.job import Job\nfrom pyspark.sql.functions import col, explode, explode_outer\nfrom pyspark.sql.types import StructType, StructField\nfrom pyspark.sql.functions import desc\nimport logging\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\n# Create a GlueContext\n\nsc = SparkContext()\nglueContext = GlueContext(sc)\nspark = glueContext.spark_session\n\n# Get the arguments passed to the job\nargs = getResolvedOptions(sys.argv, ['JOB_NAME', 'input_path', 'metadata_input_path' ,'output_path'])\n# Define the new job parameter\n\njob = Job(glueContext)\njob.init(args['JOB_NAME'], args)\n\ninput_path = args['input_path']\nmetadata_input_path = args['metadata_input_path']\noutput_path = args['output_path']\n\n\n'''\n# Define the input and output paths from the arguments\ninput_path = \"s3://products-bucket-12/validated/Products/\"\nmetadata_input_path = \"s3://products-bucket-12/validated/Metadata/\"\noutput_path = \"s3://products-bucket-12/target/\"\n'''\n\nprint(input_path)\nprint(metadata_input_path)\nprint(output_path)\nlogger.info(f\"loaded parameters \")\n\n# Read JSON data from S3\njson_data = spark.read.json(input_path)\n\njson_data.printSchema()\n#Explode the json data and filter out only valid records to process\nexploded_data = json_data.select(explode(\"Products\").alias(\"Products\"))\nexploded_data = exploded_data.filter(exploded_data.Products['isCategoryValid'] == True)\nlogger.info(f\"explodded JSON data \")\n\n# Processing Reviews data\nratings_data = exploded_data.select(\"Products.id\", explode_outer(\"Products.reviews\").alias(\"review\"))\nflattened_ratings_data = ratings_data.select(\"id\", \"review.*\")\n# Write to a separate CSV file\nratings_csv_path = f\"{output_path}/ratings\"\nflattened_ratings_data.write.mode(\"overwrite\").csv(ratings_csv_path, header=True)\nlogger.info(f\"loaded review data into S3 \")\nexploded_data.printSchema()\n#Read metadata file and create lists of required columns for all categories\n\nmetadata_df = spark.read.json(metadata_input_path)\nschema = metadata_df.schema\nFixed_Columns = ['category','eta','id','inStock','popular','price','rating','specs','title','ProcessedTimestamp']\n\nall_dataframes = {}\n\nfor field in schema.fields:\n    new_list = []  \n    #new_list.append(field.name)\n    for inner_field in field.dataType.fields:\n        if isinstance(inner_field.dataType,StructType):\n            for k in inner_field.dataType.fields:\n                new_list.append(k.name)\n                #print(new_list)\n    new_list = new_list + Fixed_Columns\n    #new_list.pop(0)\n    all_dataframes[f\"{field.name}\"] = new_list\n    #print(new_list)\n    logger.info(f\"Seggregated dataframe schema category wise for :{field.name}\")\n\n#Create dataframes dynamically for multiple categories\n\ndfs = {}\nfor key,value in all_dataframes.items():\n    #print(type(i))\n    temp = exploded_data.filter(exploded_data.Products['category'] == key)\n    temp = temp.select(\"Products.*\")\n    temp = temp.drop(\"img\",\"isCategoryValid\",\"reviews\")\n    temp = temp.select([ c for c in temp.columns if c in value])\n    temp = temp.fillna(False,\"popular\")\n    dfs[f\"{key}_df\"] = temp.orderBy(\"id\",desc(\"ProcessedTimestamp\")).dropDuplicates(['id'])\n\n\nlogger.info(f\"created category wise dataframe \")\n\n\n\n\nfor category in dfs.keys():\n    try:\n        prefix = category.split('_')[0]\n        path = f\"{output_path}/{prefix}/\"\n        existing_df = spark.read.format(\"delta\").load(path)\n        delta_df = dfs[f\"{category}\"]\n        df = existing_df.union(delta_df)\n        upsertDataFrame = df.orderBy(\"id\", desc(\"ProcessedTimestamp\")).dropDuplicates([\"id\"])\n        upsertDataFrame.write.format(\"delta\").mode(\"overwrite\").save(path)\n        logger.info(f\"Upserted the Data into S3 at {path}\")\n    \n    except Exception as e:\n        if \"Path does not exist\" in str(e):\n            print(e)\n            print(\"New files created\", prefix)\n            upsertDataFrame = dfs[f\"{category}\"]\n            upsertDataFrame.write.format(\"delta\").mode(\"overwrite\").save(path)\n            logger.info(f\"Inserted the Data fir first time into S3 at {path}\")\n            #print(type(e))\n        else:\n            print(e)\n    \n\nupsertDataFrame.show()\njob.commit()",
+	"notebook": {
+		"metadata": {
+			"kernelspec": {
+				"name": "glue_pyspark",
+				"display_name": "Glue PySpark",
+				"language": "python"
+			},
+			"language_info": {
+				"name": "Python_Glue_Session",
+				"mimetype": "text/x-python",
+				"codemirror_mode": {
+					"name": "python",
+					"version": 3
+				},
+				"pygments_lexer": "python3",
+				"file_extension": ".py"
+			},
+			"toc-showmarkdowntxt": true
+		},
+		"nbformat_minor": 4,
+		"nbformat": 4,
+		"cells": [
+			{
+				"cell_type": "code",
+				"source": "# Processing Products JSON files and writing as Delta files in S3 in this job",
+				"metadata": {
+					"editable": true
+				},
+				"execution_count": null,
+				"outputs": []
+			},
+			{
+				"cell_type": "code",
+				"source": "\n%%configure\n{\n\"--conf\":\"spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog --conf spark.delta.logStore.class=org.apache.spark.sql.delta.storage.S3SingleDriverLogStore\",\n\"--datalake-formats\":\"delta\"\n}\n\n",
+				"metadata": {
+					"trusted": true,
+					"tags": []
+				},
+				"execution_count": 2,
+				"outputs": [
+					{
+						"name": "stdout",
+						"text": "Welcome to the Glue Interactive Sessions Kernel\nFor more information on available magic commands, please type %help in any new cell.\n\nPlease view our Getting Started page to access the most up-to-date information on the Interactive Sessions kernel: https://docs.aws.amazon.com/glue/latest/dg/interactive-sessions.html\nInstalled kernel version: 1.0.4 \nThe following configurations have been updated: {'--conf': 'spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog --conf spark.delta.logStore.class=org.apache.spark.sql.delta.storage.S3SingleDriverLogStore', '--datalake-formats': 'delta'}\n",
+						"output_type": "stream"
+					}
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": "\nimport sys\nfrom pyspark.context import SparkContext\nfrom awsglue.context import GlueContext\nfrom awsglue.transforms import *\nfrom awsglue.utils import getResolvedOptions\nfrom awsglue.job import Job\nfrom pyspark.sql.functions import col, explode, explode_outer\nfrom pyspark.sql.types import StructType, StructField\nfrom pyspark.sql.functions import desc\nimport logging\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\n# Create a GlueContext\n\nsc = SparkContext()\nglueContext = GlueContext(sc)\nspark = glueContext.spark_session\n\n# Get the arguments passed to the job\nargs = getResolvedOptions(sys.argv, ['JOB_NAME', 'input_path', 'metadata_input_path' ,'output_path'])\n# Define the new job parameter\n\njob = Job(glueContext)\njob.init(args['JOB_NAME'], args)\n\ninput_path = args['input_path']\nmetadata_input_path = args['metadata_input_path']\noutput_path = args['output_path']\n\n\n'''\n# Define the input and output paths from the arguments\ninput_path = \"s3://products-bucket-12/validated/Products/\"\nmetadata_input_path = \"s3://products-bucket-12/validated/Metadata/\"\noutput_path = \"s3://products-bucket-12/target/\"\n'''\n\nprint(input_path)\nprint(metadata_input_path)\nprint(output_path)\nlogger.info(f\"loaded parameters \")",
+				"metadata": {
+					"trusted": true,
+					"tags": []
+				},
+				"execution_count": 15,
+				"outputs": [
+					{
+						"name": "stdout",
+						"text": "s3://products-bucket-12/validated/Metadata/\n",
+						"output_type": "stream"
+					}
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": "\n# Read JSON data from S3\njson_data = spark.read.json(input_path)\n\njson_data.printSchema()\n#Explode the json data and filter out only valid records to process\nexploded_data = json_data.select(explode(\"Products\").alias(\"Products\"))\nexploded_data = exploded_data.filter(exploded_data.Products['isCategoryValid'] == True)\nlogger.info(f\"explodded JSON data \")\n\n# Processing Reviews data\nratings_data = exploded_data.select(\"Products.id\", explode_outer(\"Products.reviews\").alias(\"review\"))\nflattened_ratings_data = ratings_data.select(\"id\", \"review.*\")\n# Write to a separate CSV file\nratings_csv_path = f\"{output_path}/ratings\"\nflattened_ratings_data.write.mode(\"overwrite\").csv(ratings_csv_path, header=True)\nlogger.info(f\"loaded review data into S3 \")\nexploded_data.printSchema()",
+				"metadata": {
+					"trusted": true,
+					"tags": []
+				},
+				"execution_count": 9,
+				"outputs": [
+					{
+						"name": "stdout",
+						"text": "root\n |-- Products: struct (nullable = true)\n |    |-- Brand: string (nullable = true)\n |    |-- DisplaySize: string (nullable = true)\n |    |-- For: string (nullable = true)\n |    |-- Genre: string (nullable = true)\n |    |-- HasSSD: string (nullable = true)\n |    |-- Language: string (nullable = true)\n |    |-- ProcessedTimestamp: string (nullable = true)\n |    |-- Processor: string (nullable = true)\n |    |-- RAM: string (nullable = true)\n |    |-- Type: string (nullable = true)\n |    |-- category: string (nullable = true)\n |    |-- eta: long (nullable = true)\n |    |-- id: string (nullable = true)\n |    |-- imgs: array (nullable = true)\n |    |    |-- element: string (containsNull = true)\n |    |-- inStock: long (nullable = true)\n |    |-- isCategoryValid: boolean (nullable = true)\n |    |-- popular: boolean (nullable = true)\n |    |-- price: long (nullable = true)\n |    |-- rating: double (nullable = true)\n |    |-- reviews: array (nullable = true)\n |    |    |-- element: struct (containsNull = true)\n |    |    |    |-- content: string (nullable = true)\n |    |    |    |-- name: string (nullable = true)\n |    |    |    |-- rating: string (nullable = true)\n |    |    |    |-- title: string (nullable = true)\n |    |-- specs: string (nullable = true)\n |    |-- title: string (nullable = true)\n",
+						"output_type": "stream"
+					}
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": "#Read metadata file and create lists of required columns for all categories\n\nmetadata_df = spark.read.json(metadata_input_path)\nschema = metadata_df.schema\nFixed_Columns = ['category','eta','id','inStock','popular','price','rating','specs','title','ProcessedTimestamp']\n\nall_dataframes = {}\n\nfor field in schema.fields:\n    new_list = []  \n    #new_list.append(field.name)\n    for inner_field in field.dataType.fields:\n        if isinstance(inner_field.dataType,StructType):\n            for k in inner_field.dataType.fields:\n                new_list.append(k.name)\n                #print(new_list)\n    new_list = new_list + Fixed_Columns\n    #new_list.pop(0)\n    all_dataframes[f\"{field.name}\"] = new_list\n    #print(new_list)\n    logger.info(f\"Seggregated dataframe schema category wise for :{field.name}\")\n",
+				"metadata": {
+					"trusted": true,
+					"tags": []
+				},
+				"execution_count": 10,
+				"outputs": [
+					{
+						"name": "stdout",
+						"text": "\n",
+						"output_type": "stream"
+					}
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": "#Create dataframes dynamically for multiple categories\n\ndfs = {}\nfor key,value in all_dataframes.items():\n    #print(type(i))\n    temp = exploded_data.filter(exploded_data.Products['category'] == key)\n    temp = temp.select(\"Products.*\")\n    temp = temp.drop(\"img\",\"isCategoryValid\",\"reviews\")\n    temp = temp.select([ c for c in temp.columns if c in value])\n    temp = temp.fillna(False,\"popular\")\n    dfs[f\"{key}_df\"] = temp.orderBy(\"id\",desc(\"ProcessedTimestamp\")).dropDuplicates(['id'])\n\n\nlogger.info(f\"created category wise dataframe \")\n\n\n",
+				"metadata": {
+					"trusted": true,
+					"tags": []
+				},
+				"execution_count": 18,
+				"outputs": [
+					{
+						"name": "stdout",
+						"text": "+-------------------+-------------+--------+---+----+-------+-------+-----+------+--------------------+--------------------+\n| ProcessedTimestamp|         Type|category|eta|  id|inStock|popular|price|rating|               specs|               title|\n+-------------------+-------------+--------+---+----+-------+-------+-----+------+--------------------+--------------------+\n|2024-03-19 01:02:46|Bath and Body|  Beauty|  5| be1|     34|  false|  324|   4.4|[\"Quantity: 800 m...|Dove Deeply Nouri...|\n|2024-03-19 01:02:46|       Makeup|  Beauty|  1|be10|      5|  false|  850|   4.7|[\"Brand: O.P.I\",\"...|O.P.I Nail Lacque...|\n|2024-03-19 01:02:46|    Fragrance|  Beauty| 10| be2|     36|  false|  159|   3.6|[\"Quantity: 150ml...|Park Avenue Good ...|\n|2024-03-19 01:02:46|    Fragrance|  Beauty|  2| be3|     15|  false|  299|   4.3|[\"Quantity: 150ml...|NIVEA Men Deodora...|\n|2024-03-19 01:02:46|    Skin Care|  Beauty|  2| be4|     15|  false|  359|   4.8|[\"Quantity: 150ml...|WOW Skin Science ...|\n|2024-03-19 01:02:46|    Hair Care|  Beauty|  3| be5|      9|   true|  227|   4.2|[\"Quantity: 600ml...|Parachute jumbo p...|\n|2024-03-19 01:02:46|    Skin Care|  Beauty|  3| be6|     22|   true|  345|   4.5|[\"Quantity: 250ml...|The Body Shop Bri...|\n|2024-03-19 01:02:46|    Skin Care|  Beauty|  2| be7|      2|  false|  276|   4.4|[\"Quantity: 400ml...|Vaseline Intensiv...|\n|2024-03-19 01:02:46|       Makeup|  Beauty|100| be9|     22|  false|  268|   4.4|[\"Smudge proof an...|Lakmé Eyeconic Ka...|\n+-------------------+-------------+--------+---+----+-------+-------+-----+------+--------------------+--------------------+\n",
+						"output_type": "stream"
+					}
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": "\nfor category in dfs.keys():\n    try:\n        prefix = category.split('_')[0]\n        path = f\"{output_path}/{prefix}/\"\n        existing_df = spark.read.format(\"delta\").load(path)\n        delta_df = dfs[f\"{category}\"]\n        df = existing_df.union(delta_df)\n        upsertDataFrame = df.orderBy(\"id\", desc(\"ProcessedTimestamp\")).dropDuplicates([\"id\"])\n        upsertDataFrame.write.format(\"delta\").mode(\"overwrite\").save(path)\n        logger.info(f\"Upserted the Data into S3 at {path}\")\n    \n    except Exception as e:\n        if \"Path does not exist\" in str(e):\n            print(e)\n            print(\"New files created\", prefix)\n            upsertDataFrame = dfs[f\"{category}\"]\n            upsertDataFrame.write.format(\"delta\").mode(\"overwrite\").save(path)\n            logger.info(f\"Inserted the Data fir first time into S3 at {path}\")\n            #print(type(e))\n        else:\n            print(e)\n    \n",
+				"metadata": {
+					"trusted": true,
+					"tags": []
+				},
+				"execution_count": 12,
+				"outputs": [
+					{
+						"name": "stdout",
+						"text": "Path does not exist: s3://products-bucket-12/target/Beauty\nNew files created Beauty\nPath does not exist: s3://products-bucket-12/target/Books\nNew files created Books\nPath does not exist: s3://products-bucket-12/target/Clothings\nNew files created Clothings\nPath does not exist: s3://products-bucket-12/target/Furniture\nNew files created Furniture\nPath does not exist: s3://products-bucket-12/target/Laptops\nNew files created Laptops\nPath does not exist: s3://products-bucket-12/target/Mobiles\nNew files created Mobiles\n",
+						"output_type": "stream"
+					}
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": "upsertDataFrame.show()",
+				"metadata": {
+					"trusted": true,
+					"tags": []
+				},
+				"execution_count": 14,
+				"outputs": [
+					{
+						"name": "stdout",
+						"text": "+-------+-------------------+----+--------+---+---+-------+-------+------+------+--------------------+--------------------+\n|  Brand| ProcessedTimestamp| RAM|category|eta| id|inStock|popular| price|rating|               specs|               title|\n+-------+-------------------+----+--------+---+---+-------+-------+------+------+--------------------+--------------------+\n|  Redmi|2024-03-19 01:02:46|2 GB| Mobiles| 30| m1|     40|   null|  6999|   4.2|[\"13MP rear camer...|Redmi 9A (Nature ...|\n|  Apple|2024-03-19 01:02:46|6 GB| Mobiles| 20|m10|      8|   null| 41999|   4.5|[\"6.1-inch (15.5 ...|Apple iPhone XR (...|\n|Samsung|2024-03-19 01:02:46|6 GB| Mobiles| 20| m2|     50|   null| 14999|   4.7|[\"Quad Camera Set...|Samsung Galaxy M3...|\n|  Apple|2024-03-19 01:02:46|6 GB| Mobiles|  5| m3|      1|   true|119999|   4.3|[\"6.7-inch (17 cm...|Apple iPhone 12 P...|\n|OnePlus|2024-03-19 01:02:46|8 GB| Mobiles| 10| m4|      5|   null| 24999|   4.9|[\"64MP+8MP+2MP tr...|OnePlus Nord CE 5...|\n|    Jio|2024-03-19 01:02:46|4 MB| Mobiles|  2| m5|     50|   null|  1999|   3.5|[\"2MP rear and 0....|Jio Phone 3 (Blac...|\n|   Oppo|2024-03-19 01:02:46|4 GB| Mobiles| 15| m7|      2|   null| 15490|   4.2|[\"6.51' Inch (16....|OPPO A54 (Starry ...|\n+-------+-------------------+----+--------+---+---+-------+-------+------+------+--------------------+--------------------+\n",
+						"output_type": "stream"
+					}
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": "",
+				"metadata": {},
+				"execution_count": null,
+				"outputs": []
+			}
+		]
+	}
+}

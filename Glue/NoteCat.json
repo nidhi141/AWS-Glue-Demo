@@ -1,0 +1,313 @@
+{
+	"jobConfig": {
+		"name": "NoteCat",
+		"description": "",
+		"role": "arn:aws:iam::322528665490:role/service-role/AWSGlueServiceRole-Flights",
+		"command": "glueetl",
+		"version": "4.0",
+		"runtime": null,
+		"workerType": "G.1X",
+		"numberOfWorkers": "5",
+		"maxCapacity": 5,
+		"maxRetries": 0,
+		"timeout": 2880,
+		"maxConcurrentRuns": 1,
+		"security": "none",
+		"scriptName": "NoteCat.py",
+		"scriptLocation": "s3://aws-glue-assets-322528665490-us-east-1/scripts/",
+		"language": "python-3",
+		"spark": false,
+		"jobParameters": [],
+		"tags": [],
+		"jobMode": "NOTEBOOK_MODE",
+		"createdOn": "2024-03-19T08:54:26.077Z",
+		"developerMode": false,
+		"connectionsList": [],
+		"temporaryDirectory": "s3://aws-glue-assets-322528665490-us-east-1/temporary/",
+		"glueHiveMetastore": true,
+		"etlAutoTuning": false,
+		"pythonShellPrebuiltLibraryOption": "analytics",
+		"flexExecution": false,
+		"minFlexWorkers": null,
+		"bookmark": "",
+		"metrics": "",
+		"observabilityMetrics": "",
+		"logging": "",
+		"sparkPath": "",
+		"serverEncryption": false,
+		"pythonPath": "",
+		"dependentPath": "",
+		"referencedPath": "",
+		"etlAutoScaling": false,
+		"etlAutoTuningJobRules": "",
+		"pythonVersion": ""
+	},
+	"hasBeenSaved": false,
+	"script": "\nimport sys\nfrom awsglue.transforms import *\nfrom awsglue.utils import getResolvedOptions\nfrom pyspark.context import SparkContext\nfrom awsglue.context import GlueContext\nfrom awsglue.job import Job\n  \nsc = SparkContext.getOrCreate()\nglueContext = GlueContext(sc)\nspark = glueContext.spark_session\njob = Job(glueContext)\ninput_path = \"s3://abcddemo-products/Validated/Products/\"\noutput_path = \"s3://abcddemo-products/CSVTarget/\"\n\njson_data = spark.read.json(input_path + \"*\")\njson_data.printSchema()\nprint(json_data)\nexploded_data = json_data.selectExpr(\"explode(products) as product\")\nexploded_data.printSchema()\nexploded_data.show(20)\n# Extract ratings data and write to a separate CSV file\nratings_data = exploded_data.select(\"product.id\", explode_outer(\"product.reviews\").alias(\"review\"))\nratings_data.printSchema()\n# Flatten the nested structure for ratings data\nflattened_ratings_data = ratings_data.select(\"id\", \"review.*\")\nflattened_ratings_data.printSchema()\n# Write the flattened ratings data to CSV\nratings_csv_path = f\"{output_path}/ratings\"\nflattened_ratings_data.write.mode(\"overwrite\").csv(ratings_csv_path, header=True)\nfrom pyspark.sql.functions import col\n\nflattened_data = exploded_data.select(col(\"product.*\"))\nflattened_data.printSchema()\n# Filter data based on category and write to separate folders\ncategories = exploded_data.select(\"product.category\").distinct().rdd.flatMap(lambda x: x).collect()\n\n# Flatten the imgs array\nflattened_data = exploded_data.select(col(\"product.*\"))\nflattened_data = flattened_data.drop(\"imgs\")\nflattened_data = flattened_data.drop(\"reviews\")\nflattened_data.printSchema()\n\n# Filter data based on category and write to separate folders\nfor category in categories:\n    category_data = flattened_data.filter(col(\"category\") == category)\n    category_output_path = f\"{output_path}/{category}\"\n    category_data.write.mode(\"overwrite\").json(category_output_path)\n\n \njob.commit()",
+	"notebook": {
+		"metadata": {
+			"kernelspec": {
+				"name": "glue_pyspark",
+				"display_name": "Glue PySpark",
+				"language": "python"
+			},
+			"language_info": {
+				"name": "Python_Glue_Session",
+				"mimetype": "text/x-python",
+				"codemirror_mode": {
+					"name": "python",
+					"version": 3
+				},
+				"pygments_lexer": "python3",
+				"file_extension": ".py"
+			}
+		},
+		"nbformat_minor": 4,
+		"nbformat": 4,
+		"cells": [
+			{
+				"cell_type": "markdown",
+				"source": "# AWS Glue Studio Notebook\n##### You are now running a AWS Glue Studio notebook; To start using your notebook you need to start an AWS Glue Interactive Session.\n",
+				"metadata": {
+					"editable": true,
+					"trusted": true
+				}
+			},
+			{
+				"cell_type": "markdown",
+				"source": "#### Optional: Run this cell to see available notebook commands (\"magics\").\n",
+				"metadata": {
+					"editable": true,
+					"trusted": true
+				}
+			},
+			{
+				"cell_type": "code",
+				"source": "%help",
+				"metadata": {
+					"trusted": true,
+					"editable": true
+				},
+				"execution_count": null,
+				"outputs": []
+			},
+			{
+				"cell_type": "markdown",
+				"source": "####  Run this cell to set up and start your interactive session.\n",
+				"metadata": {
+					"editable": true,
+					"trusted": true
+				}
+			},
+			{
+				"cell_type": "code",
+				"source": "%idle_timeout 2880\n%glue_version 4.0\n%worker_type G.1X\n%number_of_workers 5\n\nimport sys\nfrom awsglue.transforms import *\nfrom awsglue.utils import getResolvedOptions\nfrom pyspark.context import SparkContext\nfrom awsglue.context import GlueContext\nfrom awsglue.job import Job\n  \nsc = SparkContext.getOrCreate()\nglueContext = GlueContext(sc)\nspark = glueContext.spark_session\njob = Job(glueContext)",
+				"metadata": {
+					"trusted": true,
+					"editable": true
+				},
+				"execution_count": 1,
+				"outputs": [
+					{
+						"name": "stdout",
+						"text": "Welcome to the Glue Interactive Sessions Kernel\nFor more information on available magic commands, please type %help in any new cell.\n\nPlease view our Getting Started page to access the most up-to-date information on the Interactive Sessions kernel: https://docs.aws.amazon.com/glue/latest/dg/interactive-sessions.html\nInstalled kernel version: 1.0.4 \nCurrent idle_timeout is None minutes.\nidle_timeout has been set to 2880 minutes.\nSetting Glue version to: 4.0\nPrevious worker type: None\nSetting new worker type to: G.1X\nPrevious number of workers: None\nSetting new number of workers to: 5\nTrying to create a Glue session for the kernel.\nSession Type: glueetl\nWorker Type: G.1X\nNumber of Workers: 5\nSession ID: cd1b5ef7-f7e0-4c8a-b556-0baaff11c85c\nApplying the following default arguments:\n--glue_kernel_version 1.0.4\n--enable-glue-datacatalog true\nWaiting for session cd1b5ef7-f7e0-4c8a-b556-0baaff11c85c to get into ready status...\nSession cd1b5ef7-f7e0-4c8a-b556-0baaff11c85c has been created.\n\n",
+						"output_type": "stream"
+					}
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"source": "#### Example: Create a DynamicFrame from a table in the AWS Glue Data Catalog and display its schema\n",
+				"metadata": {
+					"editable": true,
+					"trusted": true
+				}
+			},
+			{
+				"cell_type": "code",
+				"source": "input_path = \"s3://abcddemo-products/Validated/Products/\"\noutput_path = \"s3://abcddemo-products/CSVTarget/\"\n",
+				"metadata": {
+					"trusted": true,
+					"editable": true
+				},
+				"execution_count": 27,
+				"outputs": [
+					{
+						"name": "stdout",
+						"text": "\n",
+						"output_type": "stream"
+					}
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"source": "#### Example: Convert the DynamicFrame to a Spark DataFrame and display a sample of the data\n",
+				"metadata": {
+					"editable": true,
+					"trusted": true
+				}
+			},
+			{
+				"cell_type": "code",
+				"source": "json_data = spark.read.json(input_path + \"*\")\njson_data.printSchema()\nprint(json_data)",
+				"metadata": {
+					"trusted": true,
+					"editable": true
+				},
+				"execution_count": 31,
+				"outputs": [
+					{
+						"name": "stdout",
+						"text": "root\n |-- products: array (nullable = true)\n |    |-- element: struct (containsNull = true)\n |    |    |-- Brand: string (nullable = true)\n |    |    |-- DisplaySize: string (nullable = true)\n |    |    |-- For: string (nullable = true)\n |    |    |-- Genre: string (nullable = true)\n |    |    |-- HasSSD: string (nullable = true)\n |    |    |-- Language: string (nullable = true)\n |    |    |-- Processor: string (nullable = true)\n |    |    |-- RAM: string (nullable = true)\n |    |    |-- Type: string (nullable = true)\n |    |    |-- category: string (nullable = true)\n |    |    |-- eta: long (nullable = true)\n |    |    |-- id: string (nullable = true)\n |    |    |-- imgs: array (nullable = true)\n |    |    |    |-- element: string (containsNull = true)\n |    |    |-- inStock: long (nullable = true)\n |    |    |-- isCategoryValid: boolean (nullable = true)\n |    |    |-- popular: boolean (nullable = true)\n |    |    |-- price: long (nullable = true)\n |    |    |-- rating: double (nullable = true)\n |    |    |-- reviews: array (nullable = true)\n |    |    |    |-- element: struct (containsNull = true)\n |    |    |    |    |-- content: string (nullable = true)\n |    |    |    |    |-- name: string (nullable = true)\n |    |    |    |    |-- rating: string (nullable = true)\n |    |    |    |    |-- title: string (nullable = true)\n |    |    |-- specs: string (nullable = true)\n |    |    |-- title: string (nullable = true)\n\nDataFrame[products: array<struct<Brand:string,DisplaySize:string,For:string,Genre:string,HasSSD:string,Language:string,Processor:string,RAM:string,Type:string,category:string,eta:bigint,id:string,imgs:array<string>,inStock:bigint,isCategoryValid:boolean,popular:boolean,price:bigint,rating:double,reviews:array<struct<content:string,name:string,rating:string,title:string>>,specs:string,title:string>>]\n",
+						"output_type": "stream"
+					}
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": "exploded_data = json_data.selectExpr(\"explode(products) as product\")\nexploded_data.printSchema()\nexploded_data.show(20)",
+				"metadata": {
+					"trusted": true,
+					"tags": []
+				},
+				"execution_count": 32,
+				"outputs": [
+					{
+						"name": "stdout",
+						"text": "root\n |-- product: struct (nullable = true)\n |    |-- Brand: string (nullable = true)\n |    |-- DisplaySize: string (nullable = true)\n |    |-- For: string (nullable = true)\n |    |-- Genre: string (nullable = true)\n |    |-- HasSSD: string (nullable = true)\n |    |-- Language: string (nullable = true)\n |    |-- Processor: string (nullable = true)\n |    |-- RAM: string (nullable = true)\n |    |-- Type: string (nullable = true)\n |    |-- category: string (nullable = true)\n |    |-- eta: long (nullable = true)\n |    |-- id: string (nullable = true)\n |    |-- imgs: array (nullable = true)\n |    |    |-- element: string (containsNull = true)\n |    |-- inStock: long (nullable = true)\n |    |-- isCategoryValid: boolean (nullable = true)\n |    |-- popular: boolean (nullable = true)\n |    |-- price: long (nullable = true)\n |    |-- rating: double (nullable = true)\n |    |-- reviews: array (nullable = true)\n |    |    |-- element: struct (containsNull = true)\n |    |    |    |-- content: string (nullable = true)\n |    |    |    |-- name: string (nullable = true)\n |    |    |    |-- rating: string (nullable = true)\n |    |    |    |-- title: string (nullable = true)\n |    |-- specs: string (nullable = true)\n |    |-- title: string (nullable = true)\n\n+--------------------+\n|             product|\n+--------------------+\n|{Redmi, null, nul...|\n|{Samsung, null, n...|\n|{Apple, null, nul...|\n|{OnePlus, null, n...|\n|{Jio, null, null,...|\n|{Realme, null, nu...|\n|{Oppo, null, null...|\n|{Vivo, null, null...|\n|{Mi, null, null, ...|\n|{Apple, null, nul...|\n|{null, null, null...|\n|{null, null, null...|\n|{null, null, null...|\n|{null, null, null...|\n|{null, null, null...|\n|{null, null, null...|\n|{null, null, null...|\n|{null, null, null...|\n|{null, null, null...|\n|{null, null, null...|\n+--------------------+\nonly showing top 20 rows\n",
+						"output_type": "stream"
+					}
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": "# Extract ratings data and write to a separate CSV file\nratings_data = exploded_data.select(\"product.id\", explode_outer(\"product.reviews\").alias(\"review\"))\nratings_data.printSchema()",
+				"metadata": {
+					"trusted": true,
+					"tags": []
+				},
+				"execution_count": 18,
+				"outputs": [
+					{
+						"name": "stdout",
+						"text": "NameError: name 'explode_outer' is not defined\n",
+						"output_type": "stream"
+					}
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": "# Flatten the nested structure for ratings data\nflattened_ratings_data = ratings_data.select(\"id\", \"review.*\")\nflattened_ratings_data.printSchema()",
+				"metadata": {
+					"trusted": true,
+					"tags": []
+				},
+				"execution_count": 34,
+				"outputs": [
+					{
+						"name": "stdout",
+						"text": "NameError: name 'ratings_data' is not defined\n",
+						"output_type": "stream"
+					}
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": "# Write the flattened ratings data to CSV\nratings_csv_path = f\"{output_path}/ratings\"\nflattened_ratings_data.write.mode(\"overwrite\").csv(ratings_csv_path, header=True)",
+				"metadata": {
+					"trusted": true,
+					"tags": []
+				},
+				"execution_count": 11,
+				"outputs": [
+					{
+						"name": "stdout",
+						"text": "\n",
+						"output_type": "stream"
+					}
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": "from pyspark.sql.functions import col\n\nflattened_data = exploded_data.select(col(\"product.*\"))\nflattened_data.printSchema()",
+				"metadata": {
+					"trusted": true,
+					"tags": []
+				},
+				"execution_count": 36,
+				"outputs": [
+					{
+						"name": "stdout",
+						"text": "root\n |-- Brand: string (nullable = true)\n |-- DisplaySize: string (nullable = true)\n |-- For: string (nullable = true)\n |-- Genre: string (nullable = true)\n |-- HasSSD: string (nullable = true)\n |-- Language: string (nullable = true)\n |-- Processor: string (nullable = true)\n |-- RAM: string (nullable = true)\n |-- Type: string (nullable = true)\n |-- category: string (nullable = true)\n |-- eta: long (nullable = true)\n |-- id: string (nullable = true)\n |-- imgs: array (nullable = true)\n |    |-- element: string (containsNull = true)\n |-- inStock: long (nullable = true)\n |-- isCategoryValid: boolean (nullable = true)\n |-- popular: boolean (nullable = true)\n |-- price: long (nullable = true)\n |-- rating: double (nullable = true)\n |-- reviews: array (nullable = true)\n |    |-- element: struct (containsNull = true)\n |    |    |-- content: string (nullable = true)\n |    |    |-- name: string (nullable = true)\n |    |    |-- rating: string (nullable = true)\n |    |    |-- title: string (nullable = true)\n |-- specs: string (nullable = true)\n |-- title: string (nullable = true)\n",
+						"output_type": "stream"
+					}
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": "",
+				"metadata": {
+					"trusted": true,
+					"tags": []
+				},
+				"execution_count": 15,
+				"outputs": [
+					{
+						"name": "stdout",
+						"text": "['Mobiles', 'Beauty', 'Books', 'Clothings', 'Furniture', 'Laptops']\nroot\n |-- product: struct (nullable = true)\n |    |-- Brand: string (nullable = true)\n |    |-- DisplaySize: string (nullable = true)\n |    |-- For: string (nullable = true)\n |    |-- Genre: string (nullable = true)\n |    |-- HasSSD: string (nullable = true)\n |    |-- Language: string (nullable = true)\n |    |-- Processor: string (nullable = true)\n |    |-- RAM: string (nullable = true)\n |    |-- Type: string (nullable = true)\n |    |-- category: string (nullable = true)\n |    |-- eta: long (nullable = true)\n |    |-- id: string (nullable = true)\n |    |-- imgs: array (nullable = true)\n |    |    |-- element: string (containsNull = true)\n |    |-- inStock: long (nullable = true)\n |    |-- isCategoryValid: boolean (nullable = true)\n |    |-- popular: boolean (nullable = true)\n |    |-- price: long (nullable = true)\n |    |-- rating: double (nullable = true)\n |    |-- reviews: array (nullable = true)\n |    |    |-- element: struct (containsNull = true)\n |    |    |    |-- content: string (nullable = true)\n |    |    |    |-- name: string (nullable = true)\n |    |    |    |-- rating: string (nullable = true)\n |    |    |    |-- title: string (nullable = true)\n |    |-- specs: string (nullable = true)\n |    |-- title: string (nullable = true)\n",
+						"output_type": "stream"
+					}
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": "",
+				"metadata": {
+					"trusted": true,
+					"tags": []
+				},
+				"execution_count": 43,
+				"outputs": [
+					{
+						"name": "stdout",
+						"text": "root\n |-- Brand: string (nullable = true)\n |-- DisplaySize: string (nullable = true)\n |-- For: string (nullable = true)\n |-- Genre: string (nullable = true)\n |-- HasSSD: string (nullable = true)\n |-- Language: string (nullable = true)\n |-- Processor: string (nullable = true)\n |-- RAM: string (nullable = true)\n |-- Type: string (nullable = true)\n |-- category: string (nullable = true)\n |-- eta: long (nullable = true)\n |-- id: string (nullable = true)\n |-- inStock: long (nullable = true)\n |-- isCategoryValid: boolean (nullable = true)\n |-- popular: boolean (nullable = true)\n |-- price: long (nullable = true)\n |-- rating: double (nullable = true)\n |-- specs: string (nullable = true)\n |-- title: string (nullable = true)\n",
+						"output_type": "stream"
+					}
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": "# Filter data based on category and write to separate folders\ncategories = exploded_data.select(\"product.category\").distinct().rdd.flatMap(lambda x: x).collect()\n\n# Flatten the imgs array\nflattened_data = exploded_data.select(col(\"product.*\"))\nflattened_data = flattened_data.drop(\"imgs\")\nflattened_data = flattened_data.drop(\"reviews\")\nflattened_data.printSchema()\n\n# Filter data based on category and write to separate folders\nfor category in categories:\n    category_data = flattened_data.filter(col(\"category\") == category)\n    category_output_path = f\"{output_path}/{category}\"\n    category_data.write.mode(\"overwrite\").json(category_output_path)\n",
+				"metadata": {
+					"trusted": true,
+					"tags": []
+				},
+				"execution_count": 45,
+				"outputs": [
+					{
+						"name": "stdout",
+						"text": "\n",
+						"output_type": "stream"
+					}
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": " ",
+				"metadata": {},
+				"execution_count": null,
+				"outputs": []
+			},
+			{
+				"cell_type": "markdown",
+				"source": "#### Example: Write the data in the DynamicFrame to a location in Amazon S3 and a table for it in the AWS Glue Data Catalog\n",
+				"metadata": {
+					"editable": true,
+					"jp-MarkdownHeadingCollapsed": true,
+					"tags": [],
+					"trusted": true
+				}
+			}
+		]
+	}
+}

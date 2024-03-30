@@ -1,0 +1,87 @@
+{
+	"jobConfig": {
+		"name": "DynamoDB_to_S3",
+		"description": "",
+		"role": "arn:aws:iam::322528665490:role/service-role/AWSGlueServiceRole-Flights",
+		"command": "glueetl",
+		"version": "4.0",
+		"runtime": null,
+		"workerType": "G.1X",
+		"numberOfWorkers": 10,
+		"maxCapacity": 10,
+		"maxRetries": 0,
+		"timeout": 2880,
+		"maxConcurrentRuns": 1,
+		"security": "none",
+		"scriptName": "DynamoDB_to_S3.py",
+		"scriptLocation": "s3://aws-glue-assets-322528665490-us-east-1/scripts/",
+		"language": "python-3",
+		"spark": true,
+		"sparkConfiguration": "standard",
+		"jobParameters": [],
+		"tags": [],
+		"jobMode": "VISUAL_MODE",
+		"createdOn": "2024-02-21T07:12:41.692Z",
+		"developerMode": false,
+		"connectionsList": [],
+		"temporaryDirectory": "s3://aws-glue-assets-322528665490-us-east-1/temporary/",
+		"logging": true,
+		"glueHiveMetastore": true,
+		"etlAutoTuning": false,
+		"metrics": true,
+		"observabilityMetrics": true,
+		"bookmark": "job-bookmark-disable",
+		"sparkPath": "s3://aws-glue-assets-322528665490-us-east-1/sparkHistoryLogs/",
+		"flexExecution": false,
+		"minFlexWorkers": null
+	},
+	"dag": {
+		"node-1708499365937": {
+			"nodeId": "node-1708499365937",
+			"dataPreview": false,
+			"previewAmount": 0,
+			"inputs": [
+				"node-1708499086948"
+			],
+			"name": "Amazon S3",
+			"generatedNodeName": "AmazonS3_node1708499365937",
+			"classification": "DataSink",
+			"type": "S3",
+			"streamingBatchInterval": 100,
+			"format": "json",
+			"compression": "none",
+			"path": "s3://nidhi-gluejobs/dynamo_to_s3_json/",
+			"partitionKeys": [
+				"albumtitle"
+			],
+			"schemaChangePolicy": {
+				"enableUpdateCatalog": false,
+				"updateBehavior": null,
+				"database": null,
+				"table": null
+			},
+			"updateCatalogOptions": "none",
+			"calculatedType": "",
+			"codeGenVersion": 2
+		},
+		"node-1708499086948": {
+			"nodeId": "node-1708499086948",
+			"dataPreview": false,
+			"previewAmount": 0,
+			"inputs": [],
+			"name": "Amazon DynamoDB",
+			"generatedNodeName": "AmazonDynamoDB_node1708499086948",
+			"classification": "DataSource",
+			"type": "DBB",
+			"isCatalog": true,
+			"database": "music_db",
+			"table": "music",
+			"pitrEnabled": false,
+			"additionalOptions": null,
+			"calculatedType": "",
+			"ddbConnectorType": "catalog",
+			"codeGenVersion": 2
+		}
+	},
+	"hasBeenSaved": false
+}

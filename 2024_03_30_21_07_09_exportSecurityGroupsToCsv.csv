@@ -1,0 +1,5 @@
+GroupId,GroupName,VpcId,Description,OwnerId,InboundRulesCount,OutboundRulesCount,Tags
+sg-09d63e06520c6d260,ElasticMapReduce-master,vpc-08c1864aba7101ea2,Master group for Elastic MapReduce created on 2023-11-19T00:59:42.338Z,322528665490,10,1,for-use-with-amazon-emr-managed-policies:true
+sg-09d6a4217cb15eb3e,flights-sparkui-InstanceSecurityGroup-NN6QPVLG83N,vpc-08c1864aba7101ea2,Enable HTTPS access,322528665490,1,1,"aws:cloudformation:stack-id:arn:aws:cloudformation:us-east-1:322528665490:stack/flights-sparkui/6b257900-8b70-11ee-8dc3-0e53fc2b6a31,aws:cloudformation:stack-name:flights-sparkui,aws:cloudformation:logical-id:InstanceSecurityGroup"
+sg-067c84623dd7518e2,default,vpc-08c1864aba7101ea2,default VPC security group,322528665490,1,1,
+sg-0d1435ce19caf21fa,ElasticMapReduce-slave,vpc-08c1864aba7101ea2,Slave group for Elastic MapReduce created on 2023-11-19T00:59:42.339Z,322528665490,6,1,for-use-with-amazon-emr-managed-policies:true

@@ -1,0 +1,177 @@
+{
+	"jobConfig": {
+		"name": "Customer_Data_Testing",
+		"description": "",
+		"role": "arn:aws:iam::322528665490:role/service-role/AWSGlueServiceRole-Flights",
+		"command": "glueetl",
+		"version": "4.0",
+		"runtime": null,
+		"workerType": "G.1X",
+		"numberOfWorkers": "3",
+		"maxCapacity": 3,
+		"maxRetries": 0,
+		"timeout": 2880,
+		"maxConcurrentRuns": 1,
+		"security": "none",
+		"scriptName": "Customer_Data_Testing.py",
+		"scriptLocation": "s3://aws-glue-assets-322528665490-us-east-1/scripts/",
+		"language": "python-3",
+		"spark": false,
+		"jobParameters": [],
+		"tags": [],
+		"jobMode": "NOTEBOOK_MODE",
+		"createdOn": "2024-03-29T11:33:31.247Z",
+		"developerMode": false,
+		"connectionsList": [],
+		"temporaryDirectory": "s3://aws-glue-assets-322528665490-us-east-1/temporary/",
+		"glueHiveMetastore": true,
+		"etlAutoTuning": false,
+		"pythonShellPrebuiltLibraryOption": "analytics",
+		"flexExecution": false,
+		"minFlexWorkers": null,
+		"bookmark": "",
+		"metrics": "",
+		"observabilityMetrics": "",
+		"logging": "",
+		"sparkPath": "",
+		"serverEncryption": false,
+		"pythonPath": "",
+		"dependentPath": "",
+		"referencedPath": "",
+		"etlAutoScaling": false,
+		"etlAutoTuningJobRules": "",
+		"pythonVersion": ""
+	},
+	"hasBeenSaved": false,
+	"script": "\nimport sys\nfrom awsglue.transforms import *\nfrom awsglue.utils import getResolvedOptions\nfrom pyspark.context import SparkContext\nfrom awsglue.context import GlueContext\nfrom awsglue.job import Job\n  \nsc = SparkContext.getOrCreate()\nglueContext = GlueContext(sc)\nspark = glueContext.spark_session\njob = Job(glueContext)\ns3_path = \"s3://products-bucket-12/customer_raw/Customers_Data_29032024010101.csv\"\n\n# Create a DynamicFrame from the CSV file\ndynamic_frame = glueContext.create_dynamic_frame.from_options(\n    connection_type=\"s3\",\n    connection_options={\"paths\": [s3_path]},\n    format=\"csv\",\n    format_options={\"separator\": \",\", \"withHeader\":True,\"optimizePerformance\":True}  # Optional: specify options like delimiter, header, etc.\n)\ndynamic_frame.toDF().show()\ns3_path = \"s3://products-bucket-12/customer_raw/Customers_Data_29032024010101.csv\"\nfrom pyspark.sql.functions import when, col, lit\n\n\ndf = spark.read.csv(s3_path, header=True, inferSchema=True)\n\nflagged_df = df.withColumn(\"isPkeyDataExist\", when(col(\"customer_id\").isNotNull() & col(\"customer_name\").isNotNull(), lit(True)).otherwise(lit(False)))\nflagged_df.show()\n\n\njob.commit()",
+	"notebook": {
+		"metadata": {
+			"kernelspec": {
+				"name": "glue_pyspark",
+				"display_name": "Glue PySpark",
+				"language": "python"
+			},
+			"language_info": {
+				"name": "Python_Glue_Session",
+				"mimetype": "text/x-python",
+				"codemirror_mode": {
+					"name": "python",
+					"version": 3
+				},
+				"pygments_lexer": "python3",
+				"file_extension": ".py"
+			}
+		},
+		"nbformat_minor": 4,
+		"nbformat": 4,
+		"cells": [
+			{
+				"cell_type": "markdown",
+				"source": "# AWS Glue Studio Notebook\n##### You are now running a AWS Glue Studio notebook; To start using your notebook you need to start an AWS Glue Interactive Session.\n",
+				"metadata": {
+					"editable": true,
+					"trusted": true
+				}
+			},
+			{
+				"cell_type": "markdown",
+				"source": "#### Optional: Run this cell to see available notebook commands (\"magics\").\n",
+				"metadata": {
+					"editable": true,
+					"trusted": true
+				}
+			},
+			{
+				"cell_type": "code",
+				"source": "%help",
+				"metadata": {
+					"trusted": true,
+					"editable": true
+				},
+				"execution_count": null,
+				"outputs": []
+			},
+			{
+				"cell_type": "markdown",
+				"source": "####  Run this cell to set up and start your interactive session.\n",
+				"metadata": {
+					"editable": true,
+					"trusted": true
+				}
+			},
+			{
+				"cell_type": "code",
+				"source": "%idle_timeout 2880\n%glue_version 4.0\n%worker_type G.1X\n%number_of_workers 3\n\nimport sys\nfrom awsglue.transforms import *\nfrom awsglue.utils import getResolvedOptions\nfrom pyspark.context import SparkContext\nfrom awsglue.context import GlueContext\nfrom awsglue.job import Job\n  \nsc = SparkContext.getOrCreate()\nglueContext = GlueContext(sc)\nspark = glueContext.spark_session\njob = Job(glueContext)",
+				"metadata": {
+					"trusted": true,
+					"editable": true
+				},
+				"execution_count": 7,
+				"outputs": [
+					{
+						"name": "stdout",
+						"text": "Current idle_timeout is None minutes.\nidle_timeout has been set to 2880 minutes.\nSetting Glue version to: 4.0\nPrevious worker type: G.1X\nSetting new worker type to: G.1X\nPrevious number of workers: 5\nSetting new number of workers to: 3\nTrying to create a Glue session for the kernel.\nSession Type: glueetl\nWorker Type: G.1X\nNumber of Workers: 3\nSession ID: f78654db-e170-48c6-9407-9ff17d97f9c9\nApplying the following default arguments:\n--glue_kernel_version 1.0.4\n--enable-glue-datacatalog true\n",
+						"output_type": "stream"
+					},
+					{
+						"name": "stderr",
+						"text": "Following exception encountered while creating session: An error occurred (AlreadyExistsException) when calling the CreateSession operation: Session already created, sessionId=f78654db-e170-48c6-9407-9ff17d97f9c9 \n\nError message: Session already created, sessionId=f78654db-e170-48c6-9407-9ff17d97f9c9 \n\nTraceback (most recent call last):\n  File \"/home/jupyter-user/.local/lib/python3.9/site-packages/aws_glue_interactive_sessions_kernel/glue_kernel_utils/KernelGateway.py\", line 100, in create_session\n    response = self.glue_client.create_session(\n  File \"/home/jupyter-user/.local/lib/python3.9/site-packages/botocore/client.py\", line 553, in _api_call\n    return self._make_api_call(operation_name, kwargs)\n  File \"/home/jupyter-user/.local/lib/python3.9/site-packages/botocore/client.py\", line 1009, in _make_api_call\n    raise error_class(parsed_response, operation_name)\nbotocore.errorfactory.AlreadyExistsException: An error occurred (AlreadyExistsException) when calling the CreateSession operation: Session already created, sessionId=f78654db-e170-48c6-9407-9ff17d97f9c9\nException encountered while creating session: An error occurred (AlreadyExistsException) when calling the CreateSession operation: Session already created, sessionId=f78654db-e170-48c6-9407-9ff17d97f9c9 \nTraceback (most recent call last):\n  File \"/home/jupyter-user/.local/lib/python3.9/site-packages/aws_glue_interactive_sessions_kernel/glue_kernel_base/BaseKernel.py\", line 168, in do_execute\n    self.create_session()\n  File \"/home/jupyter-user/.local/lib/python3.9/site-packages/aws_glue_interactive_sessions_kernel/glue_kernel_base/BaseKernel.py\", line 604, in create_session\n    response = self.kernel_gateway.create_session(\n  File \"/home/jupyter-user/.local/lib/python3.9/site-packages/aws_glue_interactive_sessions_kernel/glue_kernel_utils/KernelGateway.py\", line 100, in create_session\n    response = self.glue_client.create_session(\n  File \"/home/jupyter-user/.local/lib/python3.9/site-packages/botocore/client.py\", line 553, in _api_call\n    return self._make_api_call(operation_name, kwargs)\n  File \"/home/jupyter-user/.local/lib/python3.9/site-packages/botocore/client.py\", line 1009, in _make_api_call\n    raise error_class(parsed_response, operation_name)\nbotocore.errorfactory.AlreadyExistsException: An error occurred (AlreadyExistsException) when calling the CreateSession operation: Session already created, sessionId=f78654db-e170-48c6-9407-9ff17d97f9c9\n",
+						"output_type": "stream"
+					}
+				]
+			},
+			{
+				"cell_type": "markdown",
+				"source": "#### Example: Write the data in the DynamicFrame to a location in Amazon S3 and a table for it in the AWS Glue Data Catalog\n",
+				"metadata": {
+					"editable": true,
+					"trusted": true
+				}
+			},
+			{
+				"cell_type": "code",
+				"source": "s3_path = \"s3://products-bucket-12/customer_raw/Customers_Data_29032024010101.csv\"\n\n# Create a DynamicFrame from the CSV file\ndynamic_frame = glueContext.create_dynamic_frame.from_options(\n    connection_type=\"s3\",\n    connection_options={\"paths\": [s3_path]},\n    format=\"csv\",\n    format_options={\"separator\": \",\", \"withHeader\":True,\"optimizePerformance\":True}  # Optional: specify options like delimiter, header, etc.\n)\ndynamic_frame.toDF().show()",
+				"metadata": {
+					"trusted": true,
+					"tags": []
+				},
+				"execution_count": 20,
+				"outputs": [
+					{
+						"name": "stdout",
+						"text": "+-----------+---------------+-------------+--------------------+-------------------+--------+-----+\n|customer_id|  customer_name|mobile_number|               email|            address|zip_code|age\\r|\n+-----------+---------------+-------------+--------------------+-------------------+--------+-----+\n|         15| Jacob Martinez|  +1222111999|jacobmartinez@exa...|  369 Thunder Trail|   60060|   34|\n|         14|  Sophia Wilson|  +1444999888|sophiawilson@exam...|   951 Rainbow Road|   50050| 43\\r|\n|         13|   Olivia Davis|  +1999888777|oliviadavis@examp...|   753 Cloud Street|   40040| 36\\r|\n|         12|Daniel Thompson|  +1555666777|danielthompson@ex...|    951 Star Circle|   30030| 41\\r|\n|         11| Michelle Adams|  +1777777888|michelleadams@exa...|  369 Moon Crescent|   20020| 29\\r|\n|         10|    Kevin Smith|  +1222222222|kevinsmith@exampl...|     753 Sun Avenue|   10010| 47\\r|\n|          9| Jennifer Brown|  +1333333333|jenniferbrown@exa...|    147 Rose Street|   90009| 31\\r|\n|          8|    Mark Taylor|  +1666666666|marktaylor@exampl...|     369 Willow Way|   80008| 50\\r|\n|          7|     Lisa Jones|  +1444444444|lisajones@example...|852 Birch Boulevard|   70007| 37\\r|\n|          6|   Sarah Wilson|  +1999999999|sarahwilson@examp...|     987 Cedar Lane|   60006| 32\\r|\n|          5|      David Lee|  +1888888888|davidlee@example.com|      654 Pine Road|   50005| 45\\r|\n|          4|  Emily Johnson|  +1777777777|emilyjohnson@exam...|    321 Maple Drive|   40004| 39\\r|\n|          3|  Michael Brown|  +1555555555|michaelbrown@exam...|     789 Oak Avenue|   30003| 42\\r|\n|          2|     Jane Smith|  +1987654321|janesmith@example...|     456 Elm Street|   20002| 28\\r|\n|          1|       John Doe|  +1234567890| johndoe@example.com|    123 Main Street|   10001| 35\\r|\n+-----------+---------------+-------------+--------------------+-------------------+--------+-----+\n\n/opt/amazon/spark/python/lib/pyspark.zip/pyspark/sql/dataframe.py:127: UserWarning: DataFrame constructor is internal. Do not directly use it.\n",
+						"output_type": "stream"
+					}
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": "s3_path = \"s3://products-bucket-12/customer_raw/Customers_Data_29032024010101.csv\"\nfrom pyspark.sql.functions import when, col, lit\n\n\ndf = spark.read.csv(s3_path, header=True, inferSchema=True)\n\nflagged_df = df.withColumn(\"isPkeyDataExist\", when(col(\"customer_id\").isNotNull() & col(\"customer_name\").isNotNull(), lit(True)).otherwise(lit(False)))\nflagged_df.show()\n\n",
+				"metadata": {
+					"trusted": true,
+					"tags": []
+				},
+				"execution_count": 9,
+				"outputs": [
+					{
+						"name": "stdout",
+						"text": "Trying to create a Glue session for the kernel.\nSession Type: glueetl\nWorker Type: G.1X\nNumber of Workers: 3\nSession ID: f78654db-e170-48c6-9407-9ff17d97f9c9\nApplying the following default arguments:\n--glue_kernel_version 1.0.4\n--enable-glue-datacatalog true\n",
+						"output_type": "stream"
+					},
+					{
+						"name": "stderr",
+						"text": "Following exception encountered while creating session: An error occurred (AlreadyExistsException) when calling the CreateSession operation: Session already created, sessionId=f78654db-e170-48c6-9407-9ff17d97f9c9 \n\nError message: Session already created, sessionId=f78654db-e170-48c6-9407-9ff17d97f9c9 \n\nTraceback (most recent call last):\n  File \"/home/jupyter-user/.local/lib/python3.9/site-packages/aws_glue_interactive_sessions_kernel/glue_kernel_utils/KernelGateway.py\", line 100, in create_session\n    response = self.glue_client.create_session(\n  File \"/home/jupyter-user/.local/lib/python3.9/site-packages/botocore/client.py\", line 553, in _api_call\n    return self._make_api_call(operation_name, kwargs)\n  File \"/home/jupyter-user/.local/lib/python3.9/site-packages/botocore/client.py\", line 1009, in _make_api_call\n    raise error_class(parsed_response, operation_name)\nbotocore.errorfactory.AlreadyExistsException: An error occurred (AlreadyExistsException) when calling the CreateSession operation: Session already created, sessionId=f78654db-e170-48c6-9407-9ff17d97f9c9\nException encountered while creating session: An error occurred (AlreadyExistsException) when calling the CreateSession operation: Session already created, sessionId=f78654db-e170-48c6-9407-9ff17d97f9c9 \nTraceback (most recent call last):\n  File \"/home/jupyter-user/.local/lib/python3.9/site-packages/aws_glue_interactive_sessions_kernel/glue_kernel_base/BaseKernel.py\", line 168, in do_execute\n    self.create_session()\n  File \"/home/jupyter-user/.local/lib/python3.9/site-packages/aws_glue_interactive_sessions_kernel/glue_kernel_base/BaseKernel.py\", line 604, in create_session\n    response = self.kernel_gateway.create_session(\n  File \"/home/jupyter-user/.local/lib/python3.9/site-packages/aws_glue_interactive_sessions_kernel/glue_kernel_utils/KernelGateway.py\", line 100, in create_session\n    response = self.glue_client.create_session(\n  File \"/home/jupyter-user/.local/lib/python3.9/site-packages/botocore/client.py\", line 553, in _api_call\n    return self._make_api_call(operation_name, kwargs)\n  File \"/home/jupyter-user/.local/lib/python3.9/site-packages/botocore/client.py\", line 1009, in _make_api_call\n    raise error_class(parsed_response, operation_name)\nbotocore.errorfactory.AlreadyExistsException: An error occurred (AlreadyExistsException) when calling the CreateSession operation: Session already created, sessionId=f78654db-e170-48c6-9407-9ff17d97f9c9\n",
+						"output_type": "stream"
+					}
+				]
+			},
+			{
+				"cell_type": "code",
+				"source": "",
+				"metadata": {},
+				"execution_count": null,
+				"outputs": []
+			}
+		]
+	}
+}
